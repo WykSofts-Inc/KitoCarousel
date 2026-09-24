@@ -20,12 +20,27 @@ import KitoCore
 ///     ForEach(sections) { SectionView($0) }
 /// }
 /// ```
+///
+/// Pass `pinnedHeader:` for a strip (category tabs, a filter row) that sits under the hero and,
+/// once the hero has collapsed, sticks just below the compact title bar while the content
+/// scrolls underneath it:
+///
+/// ```swift
+/// KitoParallaxHeader(title: "Menu") {
+///     HeroImage()
+/// } pinnedHeader: {
+///     KitoTopTabs(categories, selection: $category)
+/// } content: {
+///     MenuList(category: category)
+/// }
+/// ```
 public struct KitoParallaxHeader<Header: View, Content: View>: View {
     private let title: String
     private let subtitle: String?
     private let height: CGFloat
     private let tint: Color?
     private let header: Header
+    private let pinned: AnyView?
     private let content: Content
 
     @Environment(\.kitoTheme) private var theme
@@ -52,6 +67,37 @@ public struct KitoParallaxHeader<Header: View, Content: View>: View {
         self.height = height
         self.tint = tint
         self.header = header()
+        self.pinned = nil
+        self.content = content()
+    }
+
+    /// A parallax header with a strip that pins under the collapsed title bar.
+    ///
+    /// - Parameters:
+    ///   - title: shown large over the header, then small in the title bar.
+    ///   - subtitle: a line under the large title.
+    ///   - height: header height at rest, status bar included.
+    ///   - tint: colour of the compact title.
+    ///   - header: the hero, usually an image; fills the header.
+    ///   - pinnedHeader: sits directly under the hero and sticks below the title bar once the
+    ///     hero has collapsed. It gets the theme background so content scrolls out of sight
+    ///     beneath it.
+    ///   - content: everything below.
+    public init<Pinned: View>(
+        title: String,
+        subtitle: String? = nil,
+        height: CGFloat = 320,
+        tint: Color? = nil,
+        @ViewBuilder header: () -> Header,
+        @ViewBuilder pinnedHeader: () -> Pinned,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.height = height
+        self.tint = tint
+        self.header = header()
+        self.pinned = AnyView(pinnedHeader())
         self.content = content()
     }
 
@@ -64,6 +110,10 @@ public struct KitoParallaxHeader<Header: View, Content: View>: View {
                 VStack(spacing: 0) {
                     hero(collapseDistance: collapseDistance)
                         .zIndex(1)
+                    if let pinned {
+                        pinnedStrip(pinned, barHeight: barHeight)
+                            .zIndex(2)
+                    }
                     content
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(theme.colors.background)
@@ -114,6 +164,19 @@ public struct KitoParallaxHeader<Header: View, Content: View>: View {
             .onChange(of: minY, initial: true) { _, value in headerMinY = value }
         }
         .frame(height: height)
+    }
+
+    /// Lays out in place under the hero; once its natural position scrolls above the bottom of
+    /// the title bar it is pushed back down so it stays just below it. The offset is applied as a
+    /// visual effect, so it never feeds back into the position it is computed from.
+    private func pinnedStrip(_ pinned: AnyView, barHeight: CGFloat) -> some View {
+        pinned
+            .frame(maxWidth: .infinity)
+            .background(theme.colors.background)
+            .visualEffect { view, proxy in
+                let minY = proxy.frame(in: .scrollView(axis: .vertical)).minY
+                return view.offset(y: max(barHeight - minY, 0))
+            }
     }
 
     private func titleBar(barHeight: CGFloat, collapseDistance: CGFloat) -> some View {

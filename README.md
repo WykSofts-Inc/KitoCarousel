@@ -126,6 +126,15 @@ indices for looping), `KitoAutoPlayState` (auto-play clock with stacked pause re
 `KitoStoryPlayback` (story segment state machine), `KitoSwipeDecision` (distance and velocity
 thresholds for the deck) and `KitoWormMath` (worm indicator interpolation).
 
+## Right-to-left
+
+Carousels, snap grids, page indicators, story bars, the cube turn and the marquee mirror with the
+layout direction: in Arabic or Hebrew the next page sits to the left, `.leading` marquees drift right
+and the page indicator scrubs from the right. Drags and taps are converted from screen coordinates,
+so carousel effects, story swipes and the story viewer's tap zones (right side = back) follow the
+finger. The card deck deliberately stays physical: `.right` is always like, and the card, stamps and
+buttons keep that orientation. The `.numbers` indicator uses `chevron.backward` / `.forward`.
+
 ## Installation
 
 ```swift

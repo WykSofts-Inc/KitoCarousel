@@ -40,6 +40,7 @@ public struct KitoCarousel<Data: RandomAccessCollection, Content: View>: View wh
     @Environment(\.kitoTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.layoutDirection) private var layoutDirection
     @State private var ownSelection: Int
     @State private var scrolledID: Int?
     @State private var viewportWidth: CGFloat = 0
@@ -143,19 +144,21 @@ public struct KitoCarousel<Data: RandomAccessCollection, Content: View>: View wh
         let count = self.count
         let activeEffect = reduceMotion ? KitoCarouselEffect.none : effect
         let fallbackWidth = viewportWidth
+        // Scroll-view frames are physical; flip so positive always means "towards the trailing edge".
+        let direction: CGFloat = layoutDirection == .rightToLeft ? -1 : 1
         let shadow = (tint ?? theme.colors.onBackground).opacity(tint == nil ? 0.14 : 0.3)
         return ForEach(0..<virtualCount, id: \.self) { virtual in
             let real = KitoLoopMath.realIndex(forVirtual: virtual, count: count)
             if let element = data.kitoElement(at: real) {
                 content(element)
-                    .modifier(KitoParallaxContent(isEnabled: activeEffect == .parallax))
+                    .modifier(KitoParallaxContent(isEnabled: activeEffect == .parallax, direction: direction))
                     .containerRelativeFrame(.horizontal)
                     .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
                     .shadow(color: shadow, radius: 14, x: 0, y: 8)
                     .visualEffect { view, proxy in
                         let frame = proxy.frame(in: .scrollView(axis: .horizontal))
                         let viewport = proxy.bounds(of: .scrollView(axis: .horizontal))?.width ?? fallbackWidth
-                        let position = kitoCarouselPosition(frame: frame, viewportWidth: viewport, pageWidth: pageWidth)
+                        let position = direction * kitoCarouselPosition(frame: frame, viewportWidth: viewport, pageWidth: pageWidth)
                         let transform = KitoCarouselTransform(effect: activeEffect, position: position, pageWidth: pageWidth)
                         return view
                             .scaleEffect(transform.scale)
@@ -281,15 +284,19 @@ final class KitoCarouselRuntime {
 /// Zooms content slightly and drifts it against the scroll.
 struct KitoParallaxContent: ViewModifier {
     let isEnabled: Bool
+    /// -1 in right-to-left layouts, where frames are physical but offsets are mirrored.
+    var direction: CGFloat = 1
 
     func body(content: Content) -> some View {
         if isEnabled {
+            let direction = direction
             content
                 .scaleEffect(1.22)
                 .visualEffect { view, proxy in
                     let frame = proxy.frame(in: .scrollView(axis: .horizontal))
                     let viewport = proxy.bounds(of: .scrollView(axis: .horizontal))?.width ?? frame.width
-                    return view.offset(x: kitoParallaxOffset(frame: frame, viewportWidth: viewport, overflow: frame.width * 0.1))
+                    let drift = kitoParallaxOffset(frame: frame, viewportWidth: viewport, overflow: frame.width * 0.1)
+                    return view.offset(x: direction * drift)
                 }
         } else {
             content

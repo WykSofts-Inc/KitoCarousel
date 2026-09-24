@@ -1,5 +1,7 @@
 # KitoCarousel
 
+**[Documentation](https://wyksofts-inc.github.io/KitoCarousel/documentation/kitocarousel/)**
+
 Carousels, page indicators, swipe decks and stories for SwiftUI: snapping carousels with seven
 effects, liquid page indicators, auto-advancing banners, a Tinder-style card deck, Wallet-style
 stacked cards, story rings and a full-screen story viewer with a 3D cube turn, a stretchy parallax

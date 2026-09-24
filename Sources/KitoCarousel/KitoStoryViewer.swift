@@ -13,8 +13,9 @@ import KitoCore
 /// A full-screen story viewer.
 ///
 /// - Segmented progress bars along the top, one per story.
-/// - Tap the right side for the next story, the left for the previous; hold anywhere to pause.
-/// - Swipe sideways to move between people, with a 3D cube turn.
+/// - Tap the trailing side for the next story, the leading side for the previous; hold anywhere to pause.
+/// - Swipe sideways to move between people, with a 3D cube turn. In right-to-left layouts the next
+///   person comes in from the left and tapping the right side goes back.
 /// - Swipe down to dismiss; the story shrinks away with your finger.
 /// - A reply field and a like button with a heart burst.
 ///
@@ -53,6 +54,7 @@ public struct KitoStoryViewer<Data: RandomAccessCollection, Content: View, Avata
     @Environment(\.kitoTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.layoutDirection) private var layoutDirection
     @State private var model: KitoStoryViewerModel
     @State private var dragX: CGFloat = 0
     @State private var dragY: CGFloat = 0
@@ -165,7 +167,9 @@ public struct KitoStoryViewer<Data: RandomAccessCollection, Content: View, Avata
             .gesture(storyGesture(width: size.width, height: size.height))
             .accessibilityElement(children: .combine)
             .accessibilityValue(Text("Story \(model.segment + 1) of \(model.segmentCount)"))
-            .accessibilityHint(Text("Tap the right side for the next story, the left for the previous. Hold to pause."))
+            .accessibilityHint(isRightToLeft
+                ? Text("Tap the left side for the next story, the right for the previous. Hold to pause.")
+                : Text("Tap the right side for the next story, the left for the previous. Hold to pause."))
             .accessibilityAction { advance() }
             .accessibilityAction(named: Text("Next story")) { advance() }
             .accessibilityAction(named: Text("Previous story")) { goBack() }
@@ -327,6 +331,14 @@ public struct KitoStoryViewer<Data: RandomAccessCollection, Content: View, Avata
 
     // MARK: Gestures
 
+    private var isRightToLeft: Bool { layoutDirection == .rightToLeft }
+
+    /// Drag distances are physical; the cube's offsets mirror in right-to-left layouts. Negative
+    /// means "towards the leading edge", i.e. towards the next person.
+    private func layoutWidth(_ physical: CGFloat) -> CGFloat {
+        isRightToLeft ? -physical : physical
+    }
+
     private func storyGesture(width: CGFloat, height: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
@@ -346,8 +358,9 @@ public struct KitoStoryViewer<Data: RandomAccessCollection, Content: View, Avata
                 }
                 switch dragAxis {
                 case .horizontal:
-                    let canMove = translation.width < 0 ? model.playback.hasNextUser : model.playback.hasPreviousUser
-                    dragX = canMove ? translation.width : translation.width * 0.22
+                    let dx = layoutWidth(translation.width)
+                    let canMove = dx < 0 ? model.playback.hasNextUser : model.playback.hasPreviousUser
+                    dragX = canMove ? dx : dx * 0.22
                 case .vertical:
                     dragY = max(translation.height, 0)
                 case nil:
@@ -364,7 +377,8 @@ public struct KitoStoryViewer<Data: RandomAccessCollection, Content: View, Avata
                 switch axis {
                 case nil:
                     guard held < 0.3 else { return }
-                    if value.location.x < width * 0.3 { goBack() } else { advance() }
+                    let x = isRightToLeft ? width - value.location.x : value.location.x
+                    if x < width * 0.3 { goBack() } else { advance() }
                 case .horizontal:
                     endHorizontalDrag(value, width: width)
                 case .vertical:
@@ -381,8 +395,8 @@ public struct KitoStoryViewer<Data: RandomAccessCollection, Content: View, Avata
     }
 
     private func endHorizontalDrag(_ value: DragGesture.Value, width: CGFloat) {
-        let translation = value.translation.width
-        let velocity = value.velocity.width
+        let translation = layoutWidth(value.translation.width)
+        let velocity = layoutWidth(value.velocity.width)
         let threshold = width * 0.25
         let playback = model.playback
         var target: Int?

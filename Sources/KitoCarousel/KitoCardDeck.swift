@@ -73,6 +73,10 @@ public final class KitoCardDeckController {
 ///
 /// The deck fills the space it's given; set a frame. VoiceOver offers Like, Nope, Super like and
 /// Undo as actions on the top card.
+///
+/// Directions are physical in every layout direction: `.right` (like) is always a swipe towards the
+/// right edge of the screen, and the card, its tilt, the stamps, the edge glow and the button row
+/// all stay the same way round in right-to-left layouts.
 public struct KitoCardDeck<Data: RandomAccessCollection, Content: View>: View where Data.Element: Identifiable {
     private let data: Data
     private let controller: KitoCardDeckController?
@@ -89,6 +93,7 @@ public struct KitoCardDeck<Data: RandomAccessCollection, Content: View>: View wh
 
     @Environment(\.kitoTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.layoutDirection) private var layoutDirection
     @State private var top = 0
     @State private var drag: CGSize = .zero
     @State private var flying: [Int: CGSize] = [:]
@@ -184,6 +189,10 @@ public struct KitoCardDeck<Data: RandomAccessCollection, Content: View>: View wh
         return min(hypot(drag.width, drag.height) / (cardSize.width * 0.5), 1)
     }
 
+    /// The deck works in physical screen directions (drags are physical), but SwiftUI mirrors
+    /// offsets, rotations and leading/trailing in right-to-left layouts. This undoes that mirroring.
+    private var mirror: CGFloat { layoutDirection == .rightToLeft ? -1 : 1 }
+
     private func offset(for index: Int) -> CGSize {
         if let thrown = flying[index] { return thrown }
         return index == top ? drag : .zero
@@ -208,8 +217,8 @@ public struct KitoCardDeck<Data: RandomAccessCollection, Content: View>: View wh
             .shadow(color: .black.opacity(isTop || isThrown ? 0.18 : 0.08), radius: isTop ? 18 : 8, x: 0, y: isTop ? 12 : 4)
             .scaleEffect(1 - lifted * 0.05, anchor: .bottom)
             .offset(y: lifted * 14)
-            .rotationEffect(.degrees(rotation), anchor: .bottom)
-            .offset(cardOffset)
+            .rotationEffect(.degrees(rotation * Double(mirror)), anchor: .bottom)
+            .offset(x: cardOffset.width * mirror, y: cardOffset.height)
             .opacity(hidden ? 0 : 1)
             .zIndex(isThrown ? 1000 + Double(index) : -Double(index))
             .allowsHitTesting(isTop)
@@ -223,24 +232,29 @@ public struct KitoCardDeck<Data: RandomAccessCollection, Content: View>: View wh
     }
 
     private func edgeGlow(_ swipe: KitoSwipeProgress) -> some View {
-        ZStack {
-            LinearGradient(colors: [theme.colors.success.opacity(0.45 * swipe.right), .clear], startPoint: .leading, endPoint: .center)
-            LinearGradient(colors: [theme.colors.danger.opacity(0.45 * swipe.left), .clear], startPoint: .trailing, endPoint: .center)
+        let left: UnitPoint = mirror < 0 ? .trailing : .leading
+        let right: UnitPoint = mirror < 0 ? .leading : .trailing
+        return ZStack {
+            LinearGradient(colors: [theme.colors.success.opacity(0.45 * swipe.right), .clear], startPoint: left, endPoint: .center)
+            LinearGradient(colors: [theme.colors.danger.opacity(0.45 * swipe.left), .clear], startPoint: right, endPoint: .center)
             LinearGradient(colors: [superColor.opacity(0.45 * swipe.up), .clear], startPoint: .bottom, endPoint: .center)
         }
         .allowsHitTesting(false)
     }
 
     private func stamps(_ swipe: KitoSwipeProgress) -> some View {
-        ZStack {
+        // LIKE sits top-left and NOPE top-right on screen, on the edge the card is moving away from.
+        let sign = Double(mirror)
+        let isMirrored = sign < 0
+        return ZStack {
             KitoDeckStamp(text: labels.like, color: theme.colors.success, amount: swipe.right)
-                .rotationEffect(.degrees(-16))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .rotationEffect(.degrees(-16 * sign))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: isMirrored ? .topTrailing : .topLeading)
             KitoDeckStamp(text: labels.nope, color: theme.colors.danger, amount: swipe.left)
-                .rotationEffect(.degrees(16))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .rotationEffect(.degrees(16 * sign))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: isMirrored ? .topLeading : .topTrailing)
             KitoDeckStamp(text: labels.superLike, color: superColor, amount: swipe.up)
-                .rotationEffect(.degrees(-6))
+                .rotationEffect(.degrees(-6 * sign))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, theme.spacing.xxl)
         }
@@ -283,6 +297,7 @@ public struct KitoCardDeck<Data: RandomAccessCollection, Content: View>: View wh
         return HStack(spacing: theme.spacing.lg) {
             KitoDeckButton(symbol: "arrow.uturn.backward", color: theme.colors.warning, size: 48, emphasis: 0, isEnabled: !history.isEmpty) { undo() }
                 .accessibilityLabel(Text("Undo"))
+                .environment(\.layoutDirection, layoutDirection)
             KitoDeckButton(symbol: "xmark", color: theme.colors.danger, size: 64, emphasis: swipe.left, isEnabled: enabled) { throwTop(.left) }
                 .accessibilityLabel(Text(labels.nope.capitalized))
             if decision.allowsUp {
@@ -292,6 +307,8 @@ public struct KitoCardDeck<Data: RandomAccessCollection, Content: View>: View wh
             KitoDeckButton(symbol: "heart.fill", color: theme.colors.success, size: 64, emphasis: swipe.right, isEnabled: enabled) { throwTop(.right) }
                 .accessibilityLabel(Text(labels.like.capitalized))
         }
+        // Nope throws left and Like throws right, so the row keeps that order on screen.
+        .environment(\.layoutDirection, .leftToRight)
     }
 
     // MARK: Gestures

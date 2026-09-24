@@ -43,6 +43,7 @@ public struct KitoPageIndicator: View {
 
     @Environment(\.kitoTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.layoutDirection) private var layoutDirection
     @Namespace private var namespace
     @State private var scrubTick = 0
 
@@ -160,7 +161,7 @@ public struct KitoPageIndicator: View {
 
     private var numbers: some View {
         HStack(spacing: theme.spacing.sm) {
-            chevron("chevron.left", enabled: current > 0) { select(current - 1) }
+            chevron("chevron.backward", enabled: current > 0) { select(current - 1) }
             HStack(spacing: 3) {
                 Text("\(current + 1)")
                     .foregroundStyle(activeColor)
@@ -169,7 +170,7 @@ public struct KitoPageIndicator: View {
                 Text("\(count)").foregroundStyle(theme.colors.onBackground.opacity(0.6))
             }
             .font(theme.typography.label.monospacedDigit())
-            chevron("chevron.right", enabled: current < count - 1) { select(current + 1) }
+            chevron("chevron.forward", enabled: current < count - 1) { select(current + 1) }
         }
         .padding(.horizontal, theme.spacing.md)
         .padding(.vertical, theme.spacing.xs + 2)
@@ -218,7 +219,9 @@ public struct KitoPageIndicator: View {
                 guard count > 0 else { return }
                 let width = indicatorWidth
                 guard width > 0 else { return }
-                let fraction = min(max(value.location.x / width, 0), 0.9999)
+                // The dots mirror in right-to-left layouts; the touch location doesn't.
+                let x = layoutDirection == .rightToLeft ? width - value.location.x : value.location.x
+                let fraction = min(max(x / width, 0), 0.9999)
                 select(Int(fraction * CGFloat(count)))
             }
     }

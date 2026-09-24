@@ -26,7 +26,8 @@ public enum KitoCarouselEffect: String, CaseIterable, Hashable, Sendable {
     case stack
 }
 
-/// The transform for one item `position` pages from the centre (negative is to the left).
+/// The transform for one item `position` pages from the centre (negative is towards the leading
+/// edge). Offsets and rotations are in layout terms, so SwiftUI mirrors them in right-to-left layouts.
 struct KitoCarouselTransform: Equatable {
     var scale: CGFloat = 1
     var rotation: Double = 0
